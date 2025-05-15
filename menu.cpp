@@ -18,11 +18,11 @@ void run_main_menu() {
         std::cout << std::endl;
         std::cout << "Choose a component to run:" << std::endl;
         std::cout << std::endl;
-        std::cout << "1. Linux/Android Scheduler Simulator" << std::endl;
-        std::cout << "   - Simulates both schedulers for educational purposes" << std::endl;
-        std::cout << std::endl;
-        std::cout << "2. Android Process Scheduler" << std::endl;
+        std::cout << "1. Android Process Scheduler" << std::endl;
         std::cout << "   - Real-time process management system using cgroups" << std::endl;
+        std::cout << std::endl;
+        std::cout << "2. Linux Scheduler Simulator" << std::endl;
+        std::cout << "   - Educational simulation of Linux scheduler" << std::endl;
         std::cout << std::endl;
         std::cout << "0. Exit" << std::endl;
         std::cout << std::endl;
@@ -32,12 +32,12 @@ void run_main_menu() {
         std::getline(std::cin, input);
         
         if (input == "1") {
-            // Run Linux/Android Scheduler Simulator
-            run_linux_android_simulator(0, nullptr);
-        }
-        else if (input == "2") {
             // Run Android Process Scheduler
             run_android_process_scheduler(0, nullptr);
+        }
+        else if (input == "2") {
+            // Run Linux Scheduler Simulator
+            run_linux_android_simulator(0, nullptr);
         }
         else if (input == "0") {
             std::cout << "Exiting..." << std::endl;

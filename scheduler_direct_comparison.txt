@@ -1,0 +1,63 @@
+# Simple Comparison Test - Linux vs Android Schedulers
+# Run this test to see key differences between Linux and Android scheduling
+
+# ---- BASIC TASK SCHEDULING ----
+# First, let's create and run identical tasks in both schedulers
+
+echo "========== Testing Linux Scheduler =========="
+use linux
+create task1 100 0 linux fg ts
+create task2 200 0 linux fg ts
+create task3 300 0 linux fg ts
+run_linux
+stats
+
+echo "========== Testing Android Scheduler =========="
+use android
+create task1 100 0 android fg ts
+create task2 200 0 android fg ts
+create task3 300 0 android fg ts
+run_android
+stats
+
+# ---- PRIORITY CLASS COMPARISON ----
+# Now see how different priority classes affect scheduling
+
+echo "========== Linux Priority Classes =========="
+use linux
+create highPrio 100 -15 linux fg fifo
+create medPrio 200 0 linux fg ts
+create lowPrio 300 10 linux bg ts
+run_linux
+stats
+
+echo "========== Android Priority Classes =========="
+use android
+create highPrio 100 0 android fg fifo
+create medPrio 200 0 android vis ts
+create lowPrio 300 0 android bg ts
+run_android
+stats
+
+# ---- PREEMPTION BEHAVIOR ----
+# Test how higher priority tasks preempt lower priority ones
+
+echo "========== Linux Preemption =========="
+use linux
+create longTask 500 0 linux fg ts
+step 50
+create urgentTask 100 -15 linux fg fifo
+status
+run_linux
+stats
+
+echo "========== Android Preemption =========="
+use android
+create longTask 500 0 android bg ts
+step 50
+create urgentTask 100 0 android fg fifo
+status
+run_android
+stats
+
+echo "Comparison complete! Review the statistics to see the differences between Linux and Android scheduling." 

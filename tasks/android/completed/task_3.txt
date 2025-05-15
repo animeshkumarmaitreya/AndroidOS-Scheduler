@@ -1,0 +1,14 @@
+Task ID: 3
+Name: high
+Class: Foreground
+Policy: FIFO
+Arrival Time: 0
+Start Time: 410
+Completion Time: 610
+Burst Time: 200
+Wait Time: 210
+Response Time: 410
+Turnaround Time: 610
+Nice Value: 0
+Priority: -20
+Preemptions: 0

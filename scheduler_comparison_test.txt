@@ -1,0 +1,124 @@
+################################
+# OS Scheduler Comparison Test
+# Linux vs. Android Schedulers
+################################
+
+# Test Case 1: Basic scheduling with same priority processes
+echo "========== Test Case 1: Basic Scheduling ==========="
+echo "Creating and running identical tasks on both schedulers"
+
+# Linux Test
+use linux
+create task1 100 0 linux fg ts
+create task2 100 0 linux fg ts
+create task3 100 0 linux fg ts
+run_linux
+stats
+
+# Android Test
+use android
+create task1 100 0 android fg ts
+create task2 100 0 android fg ts
+create task3 100 0 android fg ts
+run_android
+stats
+
+# Test Case 2: Priority Classes
+echo "========== Test Case 2: Priority Classes ==========="
+echo "Testing how different priority classes affect scheduling"
+
+# Linux Test
+use linux
+create high 200 -15 linux fg fifo
+create medium 200 0 linux fg ts
+create low 200 10 linux bg ts
+run_linux
+stats
+
+# Android Test
+use android
+create high 200 0 android fg fifo
+create medium 200 0 android vis ts
+create low 200 0 android bg ts
+run_android
+stats
+
+# Test Case 3: Preemption Behavior
+echo "========== Test Case 3: Preemption Behavior ==========="
+echo "Testing how higher priority tasks preempt lower priority ones"
+
+# Linux Test
+use linux
+create longTask 500 0 linux fg ts
+step 50
+create urgent 100 -10 linux fg fifo
+status
+run_linux
+stats
+
+# Android Test
+use android
+create longTask 500 0 android bg ts
+step 50
+create urgent 100 0 android fg fifo
+status
+run_android
+stats
+
+# Test Case 4: Round Robin Time Slices
+echo "========== Test Case 4: Round Robin Time Slices ==========="
+echo "Testing time slice behavior of round robin scheduling"
+
+# Linux Test
+use linux
+create rr1 300 0 linux fg rr
+create rr2 300 0 linux fg rr
+step 110
+status
+step 110
+status
+step 110
+status
+run_linux
+stats
+
+# Android Test
+use android
+create rr1 300 0 android fg rr
+create rr2 300 0 android fg rr
+step 110
+status
+step 110
+status
+step 110
+status
+run_android
+stats
+
+# Test Case 5: Mixed Workload
+echo "========== Test Case 5: Mixed Workload ==========="
+echo "Testing realistic workload with various priorities and policies"
+
+# Linux Test
+use linux
+create realtime 100 -20 linux fg fifo
+create interactive 200 -5 linux fg rr
+create normal1 250 0 linux fg ts
+create normal2 250 0 linux fg ts
+create background 300 10 linux bg ts
+create idle 150 19 linux empty idle
+run_linux
+stats
+
+# Android Test
+use android
+create foreground 100 0 android fg fifo
+create visible 200 0 android vis rr
+create service 250 0 android svc ts
+create background 300 0 android bg ts
+create cached 150 0 android cache idle
+run_android
+stats
+
+echo "========== Comparison Complete ==========="
+echo "Review the statistics to analyze differences between Linux and Android schedulers" 

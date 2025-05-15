@@ -1,0 +1,14 @@
+Task ID: 1
+Name: visible
+Class: Visible
+Policy: Round Robin
+Arrival Time: 0
+Start Time: 0
+Completion Time: 200
+Burst Time: 200
+Wait Time: 10
+Response Time: 0
+Turnaround Time: 200
+Nice Value: 0
+Priority: -10
+Preemptions: 2
