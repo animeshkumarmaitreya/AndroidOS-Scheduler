@@ -1,0 +1,14 @@
+Task ID: 6
+Name: highpri
+Class: Foreground
+Policy: Time Sharing
+Arrival Time: 0
+Start Time: 300
+Completion Time: 400
+Burst Time: 100
+Wait Time: 10
+Response Time: 300
+Turnaround Time: 400
+Nice Value: -10
+Priority: 110
+Preemptions: 0

@@ -1,14 +1,13 @@
 Task ID: 5
-Name: high
+Name: foreground1
 Class: Foreground
-Policy: FIFO
+Policy: Time Sharing
 Arrival Time: 0
-Start Time: 810
-Completion Time: 1010
-Burst Time: 200
-Wait Time: 10
-Response Time: 810
-Turnaround Time: 1010
-Nice Value: 10
-Priority: -20
+Start Time: 450
+Completion Time: 550
+Burst Time: 100
+Wait Time: 50
+Response Time: 450
+Turnaround Time: 550
+Nice Value: 0
 Preemptions: 0

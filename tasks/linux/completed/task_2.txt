@@ -1,13 +1,14 @@
-Task ID: 3
-Name: visible1
-Class: Visible
+Task ID: 2
+Name: midpri
+Class: Foreground
 Policy: Time Sharing
 Arrival Time: 0
 Start Time: 100
-Completion Time: 250
-Burst Time: 150
+Completion Time: 200
+Burst Time: 100
 Wait Time: 110
 Response Time: 100
-Turnaround Time: 250
+Turnaround Time: 200
 Nice Value: 0
+Priority: 120
 Preemptions: 0

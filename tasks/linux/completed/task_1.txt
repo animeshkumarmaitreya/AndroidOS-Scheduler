@@ -1,5 +1,5 @@
-Task ID: 2
-Name: foreground1
+Task ID: 1
+Name: highpri
 Class: Foreground
 Policy: Time Sharing
 Arrival Time: 0
@@ -9,5 +9,6 @@ Burst Time: 100
 Wait Time: 10
 Response Time: 0
 Turnaround Time: 100
-Nice Value: 0
+Nice Value: -10
+Priority: 110
 Preemptions: 0

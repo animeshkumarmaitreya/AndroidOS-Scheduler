@@ -1,5 +1,5 @@
-Task ID: 2
-Name: foreground1
+Task ID: 7
+Name: foreground
 Class: Foreground
 Policy: Time Sharing
 Arrival Time: 0

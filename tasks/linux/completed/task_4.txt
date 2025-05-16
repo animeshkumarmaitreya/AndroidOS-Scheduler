@@ -1,0 +1,14 @@
+Task ID: 4
+Name: lowpri
+Class: Foreground
+Policy: Time Sharing
+Arrival Time: 0
+Start Time: 500
+Completion Time: 600
+Burst Time: 100
+Wait Time: 210
+Response Time: 500
+Turnaround Time: 600
+Nice Value: 10
+Priority: 130
+Preemptions: 0

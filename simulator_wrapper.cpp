@@ -57,20 +57,27 @@ public:
     int time_slice;             // Time slice for round robin (ms)
     int time_in_slice;          // Time spent in current slice (ms)
     
+    // Android scheduling properties
+    AndroidClass android_class;
+    
     // Statistics
     int wait_time;              // Total time spent waiting
     int response_time;          // Time until first execution
     int turnaround_time;        // Total time in system
     int num_preemptions;        // Number of times preempted
     
+    // Scheduler type for this task
+    SchedulerType scheduler_type;
+    
     Task(int id, const std::string& n, int bt, int nv, int at = 0) 
         : tid(id), name(n), burst_time(bt), remaining_time(bt), nice_value(nv),
         arrival_time(at), start_time(-1), completion_time(-1),
         is_running(false), is_started(false), is_completed(false),
         dynamic_priority(0), scheduling_policy(POLICY_TIME_SHARING),
-        linux_class(LINUX_FOREGROUND),
-        linux_priority(0), time_slice(100), time_in_slice(0),
-        wait_time(0), response_time(-1), turnaround_time(0), num_preemptions(0) {
+        linux_class(LINUX_FOREGROUND), linux_priority(0), 
+        time_slice(100), time_in_slice(0), android_class(ANDROID_FOREGROUND),
+        wait_time(0), response_time(-1), turnaround_time(0), num_preemptions(0),
+        scheduler_type(LINUX) {
         
         // Calculate initial priority based on nice value
         update_linux_priority();
@@ -160,10 +167,16 @@ public:
         oss << "Task " << tid << " [" << name << "] "
             << "Nice=" << nice_value << " "
             << "BurstTime=" << burst_time << "ms "
-            << "Remaining=" << remaining_time << "ms "
-            << "Priority=" << linux_priority << " "
-            << "Class=" << ::to_string(linux_class) << " "
-            << "Policy=" << ::to_string(scheduling_policy) << " ";
+            << "Remaining=" << remaining_time << "ms ";
+        
+        if (scheduler_type == LINUX) {
+            oss << "Priority=" << linux_priority << " "
+                << "Class=" << ::to_string(linux_class) << " ";
+        } else {
+            oss << "Class=" << ::to_string(android_class) << " ";
+        }
+        
+        oss << "Policy=" << ::to_string(scheduling_policy) << " ";
         
         if (is_completed) {
             oss << "[COMPLETED]";
@@ -316,21 +329,26 @@ public:
         
         // Group tasks by class
         std::map<LinuxClass, std::vector<std::shared_ptr<Task>>> class_queues;
+        bool has_active_tasks = false;
         
         for (auto& task : all_tasks) {
             if (!task->is_completed) {
                 class_queues[task->linux_class].push_back(task);
+                has_active_tasks = true;
             }
         }
         
-        // Print each class queue
+        if (!has_active_tasks) {
+            std::cout << "  No active tasks in the system." << std::endl;
+            return;
+        }
+        
+        // Print only non-empty queues
         for (int cls = LINUX_FOREGROUND; cls <= LINUX_EMPTY; cls++) {
             LinuxClass linux_cls = static_cast<LinuxClass>(cls);
-            std::cout << "  " << to_string(linux_cls) << " Queue:" << std::endl;
             
-            if (class_queues[linux_cls].empty()) {
-                std::cout << "    [Empty]" << std::endl;
-            } else {
+            if (!class_queues[linux_cls].empty()) {
+                std::cout << "  " << to_string(linux_cls) << " Queue:" << std::endl;
                 for (auto& task : class_queues[linux_cls]) {
                     if (task == current_task) {
                         std::cout << "    * " << task->to_string() << std::endl;
@@ -341,11 +359,9 @@ public:
             }
         }
         
-        // Print currently running task
-        if (current_task) {
+        // Print currently running task only if there's one
+        if (current_task && !current_task->is_completed) {
             std::cout << "Currently Running: " << current_task->to_string() << std::endl;
-        } else {
-            std::cout << "No task currently running." << std::endl;
         }
     }
     
@@ -431,19 +447,231 @@ private:
     }
 };
 
-int run_linux_android_simulator(int, char**) {
-    // Create the Linux scheduler
-    std::shared_ptr<LinuxScheduler> linux_scheduler = std::make_shared<LinuxScheduler>();
+class AndroidScheduler : public Scheduler {
+public:
+    AndroidScheduler() {
+        current_time = 0;
+    }
     
-    // Current scheduler is Linux
+    void add_task(std::shared_ptr<Task> task) override {
+        // Add to all tasks list
+        all_tasks.push_back(task);
+        
+        // Add to the appropriate queue based on Android class
+        queues[task->android_class].push_back(task);
+        
+        // Sort each queue by arrival time
+        sort_queue(task->android_class);
+        
+        std::cout << "Added task to Android scheduler: " << task->to_string() << std::endl;
+    }
+    
+    std::shared_ptr<Task> get_next_task() override {
+        // If current task is still running and not completed, continue with it
+        if (current_task && current_task->is_running && !current_task->is_completed) {
+            return current_task;
+        }
+        
+        // Android scheduler uses strict priority between queues
+        // It will only move to a lower priority queue when higher priority queues are empty
+        for (int cls = ANDROID_FOREGROUND; cls <= ANDROID_CACHED; cls++) {
+            AndroidClass android_cls = static_cast<AndroidClass>(cls);
+            
+            if (!queues[android_cls].empty()) {
+                // Get the first task from this queue
+                auto task = queues[android_cls].front();
+                queues[android_cls].erase(queues[android_cls].begin());
+                
+                current_task = task;
+                current_task->is_running = true;
+                return current_task;
+            }
+        }
+        
+        current_task = nullptr;
+        return nullptr;
+    }
+    
+    void tick(int time_ms) override {
+        // Update waiting time for all non-running tasks
+        for (auto& task : all_tasks) {
+            if (!task->is_completed && !task->is_running) {
+                task->wait(time_ms);
+            }
+        }
+        
+        // If no current task, get one
+        if (!current_task || !current_task->is_running) {
+            current_task = get_next_task();
+        }
+        
+        // Run the current task
+        if (current_task && !current_task->is_completed) {
+            current_task->run(time_ms, current_time);
+            
+            // Check if completed
+            if (current_task->is_completed) {
+                task_completed(current_task);
+            }
+            // Check if preemption needed
+            else if (should_preempt()) {
+                preempt_current_task();
+                current_task = get_next_task();
+            }
+        }
+        
+        // Update simulation time
+        increment_time(time_ms);
+    }
+    
+    void preempt_current_task() override {
+        if (current_task) {
+            current_task->preempt();
+            current_task->num_preemptions++;
+            
+            // Re-add to the queue
+            queues[current_task->android_class].push_back(current_task);
+            
+            // Re-sort the queue
+            sort_queue(current_task->android_class);
+            
+            current_task = nullptr;
+        }
+    }
+    
+    void task_completed(std::shared_ptr<Task> task) override {
+        // Save task for statistics
+        save_task(task);
+        
+        if (current_task == task) {
+            current_task = nullptr;
+        }
+    }
+    
+    void print_queues() const override {
+        std::cout << "Android Scheduler Queues:" << std::endl;
+        
+        bool has_active_tasks = false;
+        
+        // Check if there are any active tasks
+        for (auto& task : all_tasks) {
+            if (!task->is_completed) {
+                has_active_tasks = true;
+                break;
+            }
+        }
+        
+        if (!has_active_tasks) {
+            std::cout << "  No active tasks in the system." << std::endl;
+            return;
+        }
+        
+        // Print only non-empty Android class queues
+        for (int cls = ANDROID_FOREGROUND; cls <= ANDROID_CACHED; cls++) {
+            AndroidClass android_cls = static_cast<AndroidClass>(cls);
+            
+            if (queues.find(android_cls) != queues.end() && !queues.at(android_cls).empty()) {
+                std::cout << "  " << to_string(android_cls) << " Queue:" << std::endl;
+                for (auto& task : queues.at(android_cls)) {
+                    if (task == current_task) {
+                        std::cout << "    * " << task->to_string() << std::endl;
+                    } else {
+                        std::cout << "      " << task->to_string() << std::endl;
+                    }
+                }
+            }
+        }
+        
+        // Print currently running task only if there's one
+        if (current_task && !current_task->is_completed) {
+            std::cout << "Currently Running: " << current_task->to_string() << std::endl;
+        }
+    }
+    
+    std::string get_name() const override {
+        return "Android Scheduler";
+    }
+    
+private:
+    std::map<AndroidClass, std::vector<std::shared_ptr<Task>>> queues; // Separate queue for each Android class
+    
+    bool should_preempt() const {
+        if (!current_task) return false;
+        
+        // Android uses strict priority between classes
+        // Check if there's a task in a higher priority queue
+        for (int cls = ANDROID_FOREGROUND; cls < current_task->android_class; cls++) {
+            AndroidClass android_cls = static_cast<AndroidClass>(cls);
+            
+            if (queues.find(android_cls) != queues.end() && !queues.at(android_cls).empty()) {
+                return true; // Higher priority task available
+            }
+        }
+        
+        // Time slice for round-robin within same class
+        if (current_task->time_in_slice >= current_task->time_slice) {
+            // Check if there are other tasks in the same queue
+            if (queues.find(current_task->android_class) != queues.end() && 
+                queues.at(current_task->android_class).size() > 0) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    void sort_queue(AndroidClass cls) {
+        // In Android, within a queue, tasks are typically sorted by arrival time
+        std::sort(queues[cls].begin(), queues[cls].end(),
+            [](const std::shared_ptr<Task>& a, const std::shared_ptr<Task>& b) {
+                return a->arrival_time < b->arrival_time;
+            });
+    }
+    
+    void save_task(std::shared_ptr<Task> task) {
+        // Create directories if they don't exist
+        std::string dirname = "tasks/android/completed";
+        mkdir("tasks", 0755);
+        mkdir("tasks/android", 0755);
+        mkdir(dirname.c_str(), 0755);
+        
+        // Save task information to a file
+        std::string filename = dirname + "/task_" + std::to_string(task->tid) + ".txt";
+        std::ofstream file(filename);
+        
+        if (file.is_open()) {
+            file << "Task ID: " << task->tid << std::endl;
+            file << "Name: " << task->name << std::endl;
+            file << "Class: " << to_string(task->android_class) << std::endl;
+            file << "Policy: " << to_string(task->scheduling_policy) << std::endl;
+            file << "Arrival Time: " << task->arrival_time << std::endl;
+            file << "Start Time: " << task->start_time << std::endl;
+            file << "Completion Time: " << task->completion_time << std::endl;
+            file << "Burst Time: " << task->burst_time << std::endl;
+            file << "Wait Time: " << task->wait_time << std::endl;
+            file << "Response Time: " << task->response_time << std::endl;
+            file << "Turnaround Time: " << task->turnaround_time << std::endl;
+            file << "Nice Value: " << task->nice_value << std::endl;
+            file << "Preemptions: " << task->num_preemptions << std::endl;
+            file.close();
+        }
+    }
+};
+
+int run_linux_android_simulator(int, char**) {
+    // Create the schedulers
+    std::shared_ptr<LinuxScheduler> linux_scheduler = std::make_shared<LinuxScheduler>();
+    std::shared_ptr<AndroidScheduler> android_scheduler = std::make_shared<AndroidScheduler>();
+    
+    // Current scheduler is Linux by default
     std::shared_ptr<Scheduler> current_scheduler = linux_scheduler;
     
     // Task creation counter
     int next_tid = 1;
     
     std::cout << "┌─────────────────────────────────────────────────────┐" << std::endl;
-    std::cout << "│           Linux Scheduler Simulator                │" << std::endl;
-    std::cout << "│    Educational simulation of Linux scheduling      │" << std::endl;
+    std::cout << "│           Scheduler Simulator                      │" << std::endl;
+    std::cout << "│    Linux and Android Scheduling Simulation         │" << std::endl;
     std::cout << "└─────────────────────────────────────────────────────┘" << std::endl;
     std::cout << "Type 'help' for available commands" << std::endl;
     
@@ -459,24 +687,33 @@ int run_linux_android_simulator(int, char**) {
         if (command == "create") {
             std::string name;
             int burst_time, nice_value;
-            std::string class_str = "fg";       // Default
-            std::string policy_str = "ts";      // Default
+            std::string scheduler_type_str = "linux";  // Default
+            std::string class_str = "fg";              // Default
+            std::string policy_str = "ts";             // Default
             
             iss >> name >> burst_time >> nice_value;
             
             // Optional parameters
+            if (iss) iss >> scheduler_type_str;
             if (iss) iss >> class_str;
             if (iss) iss >> policy_str;
             
+            SchedulerType scheduler_type = (scheduler_type_str == "android") ? ANDROID : LINUX;
             SchedulingPolicy policy = parse_scheduling_policy(policy_str);
             
             // Create a new task
             auto task = std::make_shared<Task>(next_tid++, name, burst_time, nice_value);
             task->scheduling_policy = policy;
-            task->linux_class = parse_linux_class(class_str);
             
-            // Add to scheduler
-            linux_scheduler->add_task(task);
+            if (scheduler_type == LINUX) {
+                task->linux_class = parse_linux_class(class_str);
+                task->scheduler_type = LINUX;
+                linux_scheduler->add_task(task);
+            } else {
+                task->android_class = parse_android_class(class_str);
+                task->scheduler_type = ANDROID;
+                android_scheduler->add_task(task);
+            }
             
             std::cout << "Created task: " << task->to_string() << std::endl;
         }
@@ -485,8 +722,16 @@ int run_linux_android_simulator(int, char**) {
             
             // Run until all tasks complete
             bool all_completed = false;
+            int steps = 0;
+            
             while (!all_completed) {
                 linux_scheduler->tick(10); // 10ms time step
+                steps++;
+                
+                // Every 10 steps, print status
+                if (steps % 10 == 0) {
+                    std::cout << "Time: " << steps * 10 << "ms" << std::endl;
+                }
                 
                 // Check if all tasks are completed
                 all_completed = true;
@@ -498,8 +743,53 @@ int run_linux_android_simulator(int, char**) {
                 }
             }
             
-            std::cout << "All tasks completed. Final state:" << std::endl;
+            std::cout << "All Linux tasks completed in " << steps * 10 << "ms. Final state:" << std::endl;
             linux_scheduler->print_queues();
+            
+            // Print statistics
+            std::cout << "Statistics for " << linux_scheduler->get_name() << ":" << std::endl;
+            for (auto task : linux_scheduler->all_tasks) {
+                if (task->is_completed) {
+                    std::cout << task->stats_string() << std::endl;
+                }
+            }
+        }
+        else if (command == "run_android") {
+            std::cout << "Running Android scheduler simulation..." << std::endl;
+            
+            // Run until all tasks complete
+            bool all_completed = false;
+            int steps = 0;
+            
+            while (!all_completed) {
+                android_scheduler->tick(10); // 10ms time step
+                steps++;
+                
+                // Every 10 steps, print status
+                if (steps % 10 == 0) {
+                    std::cout << "Time: " << steps * 10 << "ms" << std::endl;
+                }
+                
+                // Check if all tasks are completed
+                all_completed = true;
+                for (auto task : android_scheduler->all_tasks) {
+                    if (!task->is_completed) {
+                        all_completed = false;
+                        break;
+                    }
+                }
+            }
+            
+            std::cout << "All Android tasks completed in " << steps * 10 << "ms. Final state:" << std::endl;
+            android_scheduler->print_queues();
+            
+            // Print statistics
+            std::cout << "Statistics for " << android_scheduler->get_name() << ":" << std::endl;
+            for (auto task : android_scheduler->all_tasks) {
+                if (task->is_completed) {
+                    std::cout << task->stats_string() << std::endl;
+                }
+            }
         }
         else if (command == "step") {
             int time_ms = 10; // Default
@@ -512,6 +802,23 @@ int run_linux_android_simulator(int, char**) {
             std::cout << "Task list:" << std::endl;
             for (auto task : current_scheduler->all_tasks) {
                 std::cout << task->to_string() << std::endl;
+            }
+        }
+        else if (command == "use") {
+            std::string type;
+            iss >> type;
+            
+            if (type == "linux") {
+                current_scheduler = linux_scheduler;
+                std::cout << "Switched to Linux scheduler" << std::endl;
+            } 
+            else if (type == "android") {
+                current_scheduler = android_scheduler;
+                std::cout << "Switched to Android scheduler" << std::endl;
+            }
+            else {
+                std::cout << "Unknown scheduler type: " << type << std::endl;
+                std::cout << "Available types: linux, android" << std::endl;
             }
         }
         else if (command == "status") {
@@ -534,32 +841,7 @@ int run_linux_android_simulator(int, char**) {
             }
         }
         else if (command == "help") {
-            std::cout << "Available commands:" << std::endl;
-            std::cout << "  create <name> <burst_time> <nice_value> [class] [policy]" << std::endl;
-            std::cout << "    Creates a new task with specified parameters" << std::endl;
-            std::cout << "    class: fg (foreground), bg (background), daemon, empty" << std::endl;
-            std::cout << "    policy: fifo, rr (round robin), ts (time sharing), idle, deadline" << std::endl;
-            std::cout << std::endl;
-            std::cout << "  run, run_linux" << std::endl;
-            std::cout << "    Runs the Linux simulation until all tasks complete" << std::endl;
-            std::cout << std::endl;
-            std::cout << "  step [n]" << std::endl;
-            std::cout << "    Advances the simulation by n milliseconds (default: 10)" << std::endl;
-            std::cout << std::endl;
-            std::cout << "  ts" << std::endl;
-            std::cout << "    Lists all tasks (similar to ps command)" << std::endl;
-            std::cout << std::endl;
-            std::cout << "  status" << std::endl;
-            std::cout << "    Shows current state of all queues and running tasks" << std::endl;
-            std::cout << std::endl;
-            std::cout << "  stats" << std::endl;
-            std::cout << "    Shows performance statistics" << std::endl;
-            std::cout << std::endl;
-            std::cout << "  help" << std::endl;
-            std::cout << "    Displays this help message" << std::endl;
-            std::cout << std::endl;
-            std::cout << "  exit, quit" << std::endl;
-            std::cout << "    Exits the simulator" << std::endl;
+            show_help();
         }
         else if (command == "exit" || command == "quit") {
             std::cout << "Exiting simulator. Returning to main menu..." << std::endl;

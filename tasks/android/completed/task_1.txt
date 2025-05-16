@@ -1,14 +1,13 @@
 Task ID: 1
-Name: visible
-Class: Visible
-Policy: Round Robin
+Name: background1
+Class: Background
+Policy: Time Sharing
 Arrival Time: 0
-Start Time: 0
-Completion Time: 200
+Start Time: 250
+Completion Time: 450
 Burst Time: 200
-Wait Time: 10
-Response Time: 0
-Turnaround Time: 200
+Wait Time: 260
+Response Time: 250
+Turnaround Time: 450
 Nice Value: 0
-Priority: -10
-Preemptions: 2
+Preemptions: 0

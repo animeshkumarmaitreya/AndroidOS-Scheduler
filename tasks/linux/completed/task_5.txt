@@ -1,0 +1,14 @@
+Task ID: 5
+Name: midpri
+Class: Foreground
+Policy: Time Sharing
+Arrival Time: 0
+Start Time: 400
+Completion Time: 500
+Burst Time: 100
+Wait Time: 110
+Response Time: 400
+Turnaround Time: 500
+Nice Value: 0
+Priority: 120
+Preemptions: 0
